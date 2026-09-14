@@ -163,6 +163,32 @@
     img.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADrbWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAAAAAAAOcGl0bQAAAAAAAQAAAB5pbG9jAAAAAEQAAAEAAQAAAAEAAAETAAAAFwAAAChpaW5mAAAAAAABAAAAGmluZmUCAAAAAAEAAGF2MDFDb2xvcgAAAABqaXBycAAAAEtpcGNvAAAAFGlzcGUAAAAAAAAAAQAAAAEAAAAQcGl4aQAAAAADCAgIAAAADGF2MUOBAAwAAAAAE2NvbHJuY2x4AAEADQAGgAAAABdpcG1hAAAAAAAAAAEAAQQBAoMEAAAAH21kYXQSAAoFGAAGBCAyDBgACiiihAAAsBKamA==';
   }).then((ok) => { if (ok) EXT = 'avif'; });
 
+  const spritePos = (n) => {
+    const i = n - 1;
+    return `${((i % 10) / 9 * 100).toFixed(3)}% ${(Math.floor(i / 10) / 5 * 100).toFixed(3)}%`;
+  };
+
+  /* ---------- preloading ---------- */
+
+  const imageUrl = (n) => `assets/img/${typeof n === 'number' ? pad2(n) : n}.${EXT}`;
+  const spriteUrl = () => `assets/img/sprite.${EXT}`;
+  const warmCache = new Map();
+
+  // Fetches and decodes an image ahead of time; resolves when it is ready to paint.
+  function warm(url, priority = 'low') {
+    if (!warmCache.has(url)) {
+      warmCache.set(url, new Promise((resolve) => {
+        const im = new Image();
+        if ('fetchPriority' in im) im.fetchPriority = priority;
+        im.decoding = 'async';
+        im.onload = () => (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(resolve);
+        im.onerror = resolve;
+        im.src = url;
+      }));
+    }
+    return warmCache.get(url);
+  }
+
   /* ================= templates ================= */
 
   function garland(seed, { depth, count } = {}) {
@@ -179,9 +205,11 @@
     return `<div class="garland" aria-hidden="true"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0 0 Q50 ${(d * 200).toFixed(1)} 100 0" vector-effect="non-scaling-stroke"/></svg>${lanterns}</div>`;
   }
 
+  const WAIT = '<span class="wait" aria-hidden="true">почекай секундочку…</span>';
   const img = (n) => {
     const id = typeof n === 'number' ? pad2(n) : n;
-    return `<picture><source type="image/avif" data-srcset="assets/img/${id}.avif"><img data-src="assets/img/${id}.webp" alt="" decoding="async" draggable="false"></picture>`;
+    const ph = typeof n === 'number' ? `<i class="ph" style="background-position:${spritePos(n)}"></i>${WAIT}` : '';
+    return `${ph}<picture><source type="image/avif" data-srcset="assets/img/${id}.avif"><img data-src="assets/img/${id}.webp" alt="" decoding="async" draggable="false"></picture>`;
   };
 
   // 3A — дрібний зубець по всьому периметру
@@ -197,7 +225,7 @@
   };
 
   function orb(video) {
-    return `<div class="orb"><div class="orb__paper"></div><video muted playsinline loop preload="none" disableremoteplayback data-src="assets/video/${video}.mp4" data-poster="assets/video/${video}.webp"></video></div>`;
+    return `<div class="orb"><div class="orb__paper"></div>${WAIT}<video muted playsinline loop preload="none" disableremoteplayback data-src="assets/video/${video}.mp4" data-poster="assets/video/${video}.webp"></video></div>`;
   }
 
   const flourish = (d) => `<svg class="flourish ln" style="--d:${d}" viewBox="0 0 132 18" aria-hidden="true"><path d="M3 11.5c9-6.5 19-7.5 29-3.2 8.6 3.7 16 4.6 25.5-.6"/><path d="M129 11.5c-9-6.5-19-7.5-29-3.2-8.6 3.7-16 4.6-25.5-.6"/><path class="flourish__leaf" d="M66 3.2c3.2 2.6 3.2 7.6 0 11.6-3.2-4-3.2-9 0-11.6z"/></svg>`;
@@ -272,7 +300,7 @@
       range = (w) => [130, Math.min(w - 36, 300)];
     }
     return add({
-      kind: 'single', frame: kind, chapter: ci,
+      kind: 'single', frame: kind, chapter: ci, imgs: [n],
       html: `<div class="body frame-${kind}" style="--ns:${noteSize(text)}px">
         ${refrain()}
         ${garland(100 + n)}
@@ -348,7 +376,7 @@
       range = (w) => [120, Math.min(w * .76, 270)];
     }
     return add({
-      kind: 'pair', layout, chapter: ci,
+      kind: 'pair', layout, chapter: ci, imgs: [n1, n2],
       html: `<div class="body" style="--hs:${handSize(a, b)}px;--ns:${Math.min(handSize(a, b), 19)}px">
         ${refrain()}
         ${garland(100 + n1, { depth: .45 })}
@@ -450,10 +478,6 @@
     return { slots, cards, done: delay + 140 + 1050 };
   })();
 
-  const spritePos = (n) => {
-    const i = n - 1;
-    return `${((i % 10) / 9 * 100).toFixed(3)}% ${(Math.floor(i / 10) / 5 * 100).toFixed(3)}%`;
-  };
   const slotVars = (slot) => `--l:${slot.l.toFixed(4)};--t:${slot.t.toFixed(4)};--s:${slot.s};z-index:${slot.z}`;
 
   const heartHtml = HEART.cards.map((c, i) => `<i class="card${HEART.slots[c.slot].center ? ' is-center' : ''}" data-card="${i}" data-img="${c.img}" style="${slotVars(HEART.slots[c.slot])};--dx:${c.dx.toFixed(3)};--dy:${c.dy.toFixed(3)};--r0:${c.r0.toFixed(1)}deg;--r1:${c.r1.toFixed(1)}deg;--delay:${c.delay}ms;background-position:${spritePos(c.img)}"></i>`).join('');
@@ -470,6 +494,7 @@
       <div class="heart" data-sprite>
         <div class="heart__glow"></div>
         ${heartHtml}
+        <span class="wait heart__wait" aria-hidden="true">почекай секундочку…</span>
         <span class="heart__hint">торкнись або потягни фото</span>
         <button class="heart__shuffle" type="button" data-shuffle>перемішати</button>
       </div>
@@ -568,12 +593,17 @@
 
   /* ---------- media ---------- */
 
-  function loadImages(p) {
+  function loadImages(p, priority) {
     if (p.imagesLoaded) return;
     p.imagesLoaded = true;
     $$('source[data-srcset]', p.el).forEach((s) => { s.srcset = s.dataset.srcset; s.removeAttribute('data-srcset'); });
     $$('img[data-src]', p.el).forEach((img) => {
-      const done = () => img.classList.add('is-loaded');
+      if (priority) img.setAttribute('fetchpriority', priority);
+      const done = () => {
+        img.classList.add('is-loaded');
+        const box = img.closest('.frame__img, .strip__img, .note__photo');
+        if (box) box.classList.add('is-ready');
+      };
       img.addEventListener('load', done, { once: true });
       img.addEventListener('error', done, { once: true });
       img.src = img.dataset.src;
@@ -582,7 +612,7 @@
     });
     const heart = $('[data-sprite]', p.el);
     if (heart) {
-      heart.style.setProperty('--sprite', `url(assets/img/sprite.${EXT})`);
+      heart.style.setProperty('--sprite', `url(${spriteUrl()})`);
       $$('.card.is-center', heart).forEach(paintCenter);
     }
     $$('[data-bg]', p.el).forEach((n) => {
@@ -597,6 +627,7 @@
       v.muted = true;
       v.setAttribute('muted', '');
       v.poster = v.dataset.poster;
+      warm(v.dataset.poster, 'high').then(() => v.parentElement.classList.add('is-ready'));
       v.preload = 'auto';
       v.src = v.dataset.src;
     });
@@ -626,12 +657,17 @@
   function syncMedia(center) {
     PAGES.forEach((p, i) => {
       const dist = Math.abs(i - center);
-      if (dist <= 2 || p.index === finalPage.index && center >= LAST - 1) loadImages(p);
-      if (dist <= 1) attachVideos(p);
+      if (dist <= 2 || p.index === finalPage.index && center >= LAST - 1) loadImages(p, i === center ? 'high' : 'auto');
+      // further ahead: fetch quietly into the cache so fast flipping finds them ready
+      else if (i > center && i <= center + 6 && p.imgs) p.imgs.forEach((n) => warm(imageUrl(n)));
+      if (dist <= 1 && p.kind !== 'final') attachVideos(p);
       else if (dist > 3 && !(anim && (anim.a === p || anim.b === p))) detachVideos(p);
     });
     // chapter openers are reachable from the final page in one tap
     if (center === LAST) chapterStarts.forEach((i) => loadImages(PAGES[i]));
+    // the heart needs its sprite, centre illustration and letters — start early
+    if (unlocked) warm(spriteUrl());
+    if (center >= outroPage.index - 4) warmHeart();
   }
 
   /* ---------- page state ---------- */
@@ -674,26 +710,52 @@
     p.el.classList.add('is-in');
   }
 
-  let heartTimer = 0;
+  const warmHeart = (priority = 'low') => Promise.all([
+    warm(spriteUrl(), priority),
+    warm(imageUrl(FINAL_IMAGE), priority),
+    ...[1, 2, 3, 4, 5].map((k) => warm(imageUrl(`letter${k}`), priority))
+  ]);
+
+  let heartTimer = 0, heartToken = 0;
   function activate(p) {
     p.el.classList.add('is-active');
     p.el.setAttribute('aria-hidden', 'false');
-    playVideos(p, true);
-    if (p.kind === 'final') {
-      clearTimeout(heartTimer);
-      p.el.classList.remove('is-assembled');
-      void p.el.offsetWidth;
-      p.el.classList.remove('is-playable');
+    if (p.kind !== 'final') { playVideos(p, true); return; }
+
+    // the heart only starts to gather once every photo in it can be painted
+    clearTimeout(heartTimer);
+    const token = ++heartToken;
+    p.el.classList.remove('is-assembled', 'is-playable', 'is-waiting');
+    void p.el.offsetWidth;
+    const t0 = performance.now();
+    let ready = false;
+    const waitTimer = setTimeout(() => { if (token === heartToken && !ready) p.el.classList.add('is-waiting'); }, 650);
+    Promise.race([warmHeart('high'), new Promise((r) => setTimeout(r, 8000))]).then(() => {
+      ready = true;
+      clearTimeout(waitTimer);
+      if (token !== heartToken) return;
+      const waited = p.el.classList.contains('is-waiting');
+      p.el.classList.remove('is-waiting');
+      const lead = reduceMotion.matches ? 60 : waited ? 420 : Math.max(60, 520 - (performance.now() - t0));
       heartTimer = setTimeout(() => {
+        if (token !== heartToken) return;
         p.el.classList.add('is-assembled');
+        // chapter videos wait for their turn so they do not compete with the photos
+        setTimeout(() => { if (token === heartToken) playVideos(p, true); }, reduceMotion.matches ? 0 : navDelay - 300);
         heartTimer = setTimeout(() => p.el.classList.add('is-playable'), reduceMotion.matches ? 300 : HEART.done + 200);
-      }, reduceMotion.matches ? 60 : 520);
-    }
+      }, lead);
+    });
   }
 
   function deactivate(p) {
     p.el.classList.remove('is-active');
-    if (p.kind === 'final') { clearTimeout(heartTimer); closeViewer(true); p.el.classList.remove('is-assembled', 'is-playable'); }
+    if (p.kind === 'final') {
+      heartToken++;
+      clearTimeout(heartTimer);
+      closeViewer(true);
+      playVideos(p, false);
+      p.el.classList.remove('is-assembled', 'is-playable', 'is-waiting');
+    }
   }
 
   /* ---------- chapter navigation: numerals open up as she reaches them ---------- */
@@ -1196,7 +1258,7 @@
         unlocked = true;
         store.set(STORE.unlocked, '1');
         prime(0);
-        PAGES.slice(1, 4).forEach(loadImages);
+        PAGES.slice(1, 4).forEach((pg) => loadImages(pg, 'high'));
         attachVideos(PAGES[1]);
         setTimeout(() => {
           window.scrollTo(0, 0);
@@ -1281,6 +1343,7 @@
     };
     requestAnimationFrame(bootPage);
     setTimeout(bootPage, 120);
-    if (!unlocked) PAGES.slice(1, 3).forEach(loadImages);
+    if (!unlocked) PAGES.slice(1, 3).forEach((pg) => loadImages(pg));
+    setTimeout(() => warm(spriteUrl()), unlocked ? 800 : 2500);
   });
 })();
