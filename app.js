@@ -381,6 +381,7 @@
         ${refrain()}
         ${garland(100 + n1, { depth: .45 })}
         ${inner}
+        <div class="pair-wide">${frameE(n1, a, 1, 'note--wl')}${frameE(n2, b, 2, 'note--wr')}</div>
         ${tag(ch)}
       </div>`,
       range
@@ -541,6 +542,25 @@
     pagesEl.appendChild(el);
   });
 
+  /* ---------- tablets & desktops: scale the book, two columns when wide ---------- */
+
+  let SCALE = 1;
+  function layoutStage() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const wide = W >= 900 && W / H >= 1.15;
+    let k = 1;
+    if (wide) k = clamp(H / 740, .72, 1.8);
+    else if (W >= 600) k = clamp(Math.min(W / 430, H / 760), 1, 1.8);
+    SCALE = k;
+    stage.classList.toggle('is-wide', wide);
+    const scaled = wide || k !== 1;
+    stage.classList.toggle('is-scaled', scaled);
+    stage.style.width = scaled ? `${W / k}px` : '';
+    stage.style.height = scaled ? `${H / k}px` : '';
+    stage.style.transform = scaled ? `scale(${k})` : '';
+  }
+  layoutStage();
+
   const LAST = PAGES.length - 1;
   let unlocked = PREVIEW || store.get(STORE.unlocked) === '1';
   if (/[?&]reset\b/.test(location.search)) { store.clear(); unlocked = false; history.replaceState(null, '', location.pathname); }
@@ -551,12 +571,31 @@
 
   /* ---------- fit content to the viewport ---------- */
 
+  // media limits for the two-column layout
+  function wideRange(p, colW, innerW, h) {
+    switch (p.kind) {
+      case 'opener': return [160, Math.min(colW * .8, h - 230, 470)];
+      case 'single': return [200, Math.min(colW * (p.frame === 'C' ? 1 : .92), h - (p.frame === 'E' ? 290 : 200), 540)];
+      case 'pair': return [150, Math.min((innerW - 64) / 2 - 40, h - 350, 420)];
+      case 'final': return [240, Math.min(colW * .95, (h - 120) / .9, 600)];
+      default: return [0, Math.min(colW * .85, h - 190, 520)];
+    }
+  }
+
   function fit(p) {
     const w = stage.clientWidth, h = stage.clientHeight;
-    const key = `${w}x${h}`;
+    const wide = stage.classList.contains('is-wide');
+    const key = `${w}x${h}${wide ? 'w' : ''}`;
     if (p.fitKey === key) return;
-    const cw = p.body.clientWidth - 60;
-    const [min, max] = p.range(cw, h);
+    let min, max;
+    if (wide) {
+      const cs = getComputedStyle(p.body);
+      const inner = p.body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const colW = (inner - (parseFloat(cs.columnGap) || 0)) / 2;
+      [min, max] = wideRange(p, colW, inner, h);
+    } else {
+      [min, max] = p.range(p.body.clientWidth - 60, h);
+    }
     const el = p.el;
     const set = (m, fs) => {
       el.style.setProperty('--m', `${Math.round(m)}px`);
@@ -564,6 +603,7 @@
       el.style.setProperty('--fs', fs);
     };
     const over = () => p.body.scrollHeight > p.body.clientHeight + 1;
+    el.classList.add('is-fitting');     // scattered heart cards must not count as overflow
 
     set(max, 1);
     if (over()) {
@@ -588,6 +628,7 @@
       const m = parseFloat(el.style.getPropertyValue('--m'));
       frame.classList.toggle('is-gone', m < 120);
     }
+    el.classList.remove('is-fitting');
     p.fitKey = key;
   }
 
@@ -949,13 +990,14 @@
       }
     }
     const d = g.axis === 'y' ? dy : dx;
-    const size = g.axis === 'y' ? stage.clientHeight : stage.clientWidth;
+    const rect = stage.getBoundingClientRect();
+    const size = g.axis === 'y' ? rect.height : rect.width;
     const now = performance.now();
     g.hist.push({ t: now, d });
     while (g.hist.length > 2 && now - g.hist[0].t > 90) g.hist.shift();
 
     if (g.rubber) {
-      const r = d / (1 + Math.abs(d) / 60) * .5;
+      const r = d / (1 + Math.abs(d) / 60) * .5 / SCALE;
       PAGES[cur].el.style.transform = g.axis === 'y' ? `translate3d(0, ${r}px, 0)` : `translate3d(${r}px, 0, 0)`;
       return;
     }
@@ -1089,7 +1131,7 @@
     const dy = (before.top + before.height / 2) - (after.top + after.height / 2);
     const k = before.width / after.width;
     const wa = el.animate([
-      { transform: `translate(${dx}px, ${dy}px) rotate(${r1}deg) scale(${k})` },
+      { transform: `translate(${dx / SCALE}px, ${dy / SCALE}px) rotate(${r1}deg) scale(${k})` },
       { transform: `rotate(${r1}deg)` }
     ], { duration, delay, easing: 'cubic-bezier(.2,.9,.25,1.08)', fill: 'backwards' });
     wa.onfinish = () => el.classList.remove('is-flying');
@@ -1129,7 +1171,7 @@
       return;
     }
     const r1 = HEART.cards[+cd.el.dataset.card].r1;
-    cd.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${r1 * .3}deg) scale(1.18)`;
+    cd.el.style.transform = `translate(${dx / SCALE}px, ${dy / SCALE}px) rotate(${r1 * .3}deg) scale(1.18)`;
     const under = document.elementFromPoint(e.clientX, e.clientY);
     const target = under && under.closest && under.closest('.card');
     const t = target && target !== cd.el && heartEl.contains(target) ? target : null;
@@ -1206,10 +1248,10 @@
     const dx = (from.left + from.width / 2) - (toPhoto.left + toPhoto.width / 2);
     const dy = (from.top + from.height / 2) - (toPhoto.top + toPhoto.height / 2);
     const ox = toPhoto.left + toPhoto.width / 2 - to.left, oy = toPhoto.top + toPhoto.height / 2 - to.top;
-    viewerCard.style.transformOrigin = `${ox}px ${oy}px`;
+    viewerCard.style.transformOrigin = `${ox / SCALE}px ${oy / SCALE}px`;
     const r1 = HEART.cards[+cardEl.dataset.card].r1;
     viewerCard.animate([
-      { transform: `translate(${dx}px, ${dy}px) scale(${k}) rotate(${r1}deg)`, opacity: .4 },
+      { transform: `translate(${dx / SCALE}px, ${dy / SCALE}px) scale(${k}) rotate(${r1}deg)`, opacity: .4 },
       { transform: 'rotate(-1.2deg)', opacity: 1 }
     ], { duration: 620, easing: 'cubic-bezier(.2,.85,.25,1)', fill: 'both' });
     $('.viewer__veil', viewer).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, fill: 'both' });
@@ -1231,7 +1273,7 @@
     $('.viewer__veil', viewer).animate([{ opacity: 1 }, { opacity: 0 }], { duration: 360, fill: 'forwards' });
     const wa = viewerCard.animate([
       { transform: 'rotate(-1.2deg)', opacity: 1 },
-      { transform: `translate(${dx}px, ${dy}px) scale(${k}) rotate(${r1}deg)`, opacity: .2 }
+      { transform: `translate(${dx / SCALE}px, ${dy / SCALE}px) scale(${k}) rotate(${r1}deg)`, opacity: .2 }
     ], { duration: 440, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
     wa.onfinish = hide;
   }
@@ -1328,7 +1370,8 @@
   /* ---------- boot ---------- */
 
   function onResize() {
-    if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+    if (document.activeElement && document.activeElement.tagName === 'INPUT' && SCALE === 1) return;
+    layoutStage();
     PAGES.forEach((p) => { p.fitKey = ''; if (p.el.classList.contains('is-live')) fit(p); });
   }
 
