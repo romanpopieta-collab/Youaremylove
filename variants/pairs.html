@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Пари фото — 5 варіантів</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bad+Script&family=Spectral:ital,wght@0,300;0,400;1,300&display=swap">
+<style>
+  body { margin: 0; padding: 36px 32px 60px; background: #EFE7DA; font-family: Spectral, Georgia, serif; color: #3A312A; }
+  h1 { margin: 0; font: 400 32px/1.1 Spectral, serif; }
+  .lead { margin: 8px 0 30px; max-width: 760px; font: 300 16px/1.5 Spectral, serif; color: #6C6257; }
+  .grid { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 20px; }
+  .col { flex: none; width: 300px; display: flex; flex-direction: column; gap: 14px; }
+  .badge { display: inline-block; font: 600 11px/1 Spectral, serif; letter-spacing: .14em; padding: 6px 10px; border-radius: 99px; background: #4B4038; color: #FDF6EC; }
+  .name { font: 400 22px/1.2 'Bad Script', cursive; color: #984853; margin-top: 8px; }
+  .desc { font: 300 14px/1.45 Spectral, serif; color: #6C6257; min-height: 62px; }
+  .phone { position: relative; width: 300px; overflow: hidden; border-radius: 30px; box-shadow: 0 24px 40px -22px rgba(100,78,60,.45), 0 0 0 1px rgba(100,78,60,.12); background: #FDF6EC; }
+  .phone iframe { position: absolute; left: 0; top: 0; width: 390px; border: 0; transform: scale(.7692); transform-origin: 0 0; }
+  .phone--664 { height: 511px; } .phone--664 iframe { height: 664px; }
+  .phone--844 { height: 649px; } .phone--844 iframe { height: 844px; }
+  .label { font: 400 11px/1 Spectral, serif; letter-spacing: .18em; color: #8A7D6D; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<h1>Дві фотографії на сторінці — 5 варіантів</h1>
+<p class="lead">Кожен варіант зібраний на живому движку сайту: ті самі рамки, шрифти й анімація тексту. Показано короткі підписи і найдовші, екран Safari на iPhone 14 (390×664) і повний екран (390×844). Скажіть номери, які переносимо.</p>
+<div class="grid" id="grid"></div>
+<script>
+  const V = [
+    ['V1', 'stack', 'Стос клаптиків', 'Два великі паперові клаптики внахлест. Підпис першого вгорі на полі, другого — внизу.'],
+    ['V2', 'stripnote', 'Смуга і клаптик', 'Перше фото смугою від краю до краю, друге — клаптиком, що наліз на її нижній край.'],
+    ['V3', 'strips', 'Дві смуги', 'Обидва фото на всю ширину екрана, одне під одним. Найбільші, але кадр обрізається згори й знизу.'],
+    ['V4', 'hero', 'Велике + вклейка', 'Перше фото великою рваною рамкою, друге — полароїдом, вклеєним на кут.'],
+    ['V5', 'flip', 'Одна рамка, два кадри', 'Кожне фото на весь розмір по черзі: кадри й підписи мʼяко змінюють одне одного кожні 4 секунди.']
+  ];
+  const shots = [['664', 32, 'короткі підписи · 390×664'], ['664', 33, 'довгі підписи · 390×664'], ['844', 7, 'повний екран · 390×844']];
+  const grid = document.getElementById('grid');
+  V.forEach(([badge, layout, name, desc]) => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.innerHTML = `<div><span class="badge">${badge}</span><div class="name">${name}</div></div><div class="desc">${desc}</div>` +
+      shots.map(([h, p, label]) => `<div class="label">${label}</div><div class="phone phone--${h}"><iframe loading="lazy" src="../index.html?preview&layout=${layout}&p=${p}" title="${badge} ${label}"></iframe></div>`).join('');
+    grid.appendChild(col);
+  });
+</script>
+</body>
+</html>
