@@ -495,7 +495,7 @@
         <div class="heart__glow"></div>
         ${heartHtml}
         <span class="wait heart__wait" aria-hidden="true">почекай секундочку…</span>
-        <span class="heart__hint">торкнись або потягни фото</span>
+        <span class="heart__hint">торкнись фото або затисни й тягни</span>
         <button class="heart__shuffle" type="button" data-shuffle>перемішати</button>
       </div>
       <div class="word" aria-label="Кохаю">
@@ -917,7 +917,7 @@
 
   stage.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (e.target.closest('input, button, a, label, .viewer, .is-playable .card')) return;
+    if (e.target.closest('input, button, a, label, .viewer')) return;
     if (document.activeElement && document.activeElement.tagName === 'INPUT') {
       document.activeElement.blur();
       return;
@@ -1011,6 +1011,7 @@
 
   function tap(e) {
     if (!unlocked) return;
+    if (e.target.closest && e.target.closest('.card') && finalPage.el.classList.contains('is-playable')) return;
     const rect = stage.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     if (x < .32) prev(); else next();
@@ -1094,23 +1095,38 @@
     wa.onfinish = () => el.classList.remove('is-flying');
   }
 
-  let cd = null;   // card drag state
+  // tap → opens the photo (on click, so the follow-up click can't close it again)
+  // press and hold → the photo lifts and can be dragged onto another one to swap
+  const HOLD_MS = 320;
+  let cd = null;   // card press / drag state
+  let clickBlockUntil = 0;
+  const playable = () => finalPage.el.classList.contains('is-playable');
 
   heartEl.addEventListener('pointerdown', (e) => {
     const el = e.target.closest('.card');
-    if (!el || !finalPage.el.classList.contains('is-playable') || cd) return;
-    e.preventDefault();
-    try { el.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
-    cd = { el, id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false, target: null };
+    if (!el || !playable() || cd) return;
+    cd = { el, id: e.pointerId, x0: e.clientX, y0: e.clientY, armed: false, target: null };
+    el.classList.add('is-pressing');
+    cd.timer = setTimeout(() => {
+      if (!cd || cd.el !== el) return;
+      cd.armed = true;
+      g = null;                                   // the page stays put while she drags
+      try { el.setPointerCapture(cd.id); } catch (err) { /* noop */ }
+      el.classList.remove('is-pressing');
+      el.classList.add('is-dragging');
+      const r1 = HEART.cards[+el.dataset.card].r1;
+      el.style.transform = `rotate(${r1 * .3}deg) scale(1.18)`;
+      el.animate([{ transform: `rotate(${r1}deg) scale(1)` }, { transform: el.style.transform }], { duration: 200, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+    }, HOLD_MS);
   });
 
   heartEl.addEventListener('pointermove', (e) => {
     if (!cd || e.pointerId !== cd.id) return;
     const dx = e.clientX - cd.x0, dy = e.clientY - cd.y0;
-    if (!cd.moved) {
-      if (Math.hypot(dx, dy) < 7) return;
-      cd.moved = true;
-      cd.el.classList.add('is-dragging');
+    if (!cd.armed) {
+      // moved before the hold completed: it is a swipe, let the page handle it
+      if (Math.hypot(dx, dy) > 10) { clearTimeout(cd.timer); cd.el.classList.remove('is-pressing'); cd = null; }
+      return;
     }
     const r1 = HEART.cards[+cd.el.dataset.card].r1;
     cd.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${r1 * .3}deg) scale(1.18)`;
@@ -1126,15 +1142,13 @@
 
   function endCardDrag(e, cancelled) {
     if (!cd || e.pointerId !== cd.id) return;
-    const { el, target, moved } = cd;
+    const { el, target, armed } = cd;
+    clearTimeout(cd.timer);
     cd = null;
-    el.classList.remove('is-dragging');
+    el.classList.remove('is-pressing', 'is-dragging');
     if (target) target.classList.remove('is-target');
-    if (!moved) {
-      el.style.transform = '';
-      if (!cancelled) openViewer(el);
-      return;
-    }
+    if (!armed) return;                           // a plain tap: the click handler opens it
+    clickBlockUntil = performance.now() + 450;
     const mySlot = HEART.cards[+el.dataset.card].slot;
     if (target && !cancelled) {
       const theirSlot = HEART.cards[+target.dataset.card].slot;
@@ -1146,6 +1160,14 @@
   }
   heartEl.addEventListener('pointerup', (e) => endCardDrag(e, false));
   heartEl.addEventListener('pointercancel', (e) => endCardDrag(e, true));
+
+  heartEl.addEventListener('click', (e) => {
+    const el = e.target.closest('.card');
+    if (!el || !playable() || viewerOpen() || performance.now() < clickBlockUntil) return;
+    openViewer(el);
+  });
+  // iOS long-press would otherwise try to open a callout / select
+  heartEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
   $('[data-shuffle]', heartEl).addEventListener('click', () => {
     if (!finalPage.el.classList.contains('is-playable')) return;
@@ -1159,7 +1181,9 @@
 
   const viewerOpen = () => !viewer.hidden;
 
+  let viewerOpenedAt = 0;
   function openViewer(cardEl) {
+    viewerOpenedAt = performance.now();
     const n = +cardEl.dataset.img;
     const m = MOMENTS[n] || {};
     viewerFrom = cardEl;
@@ -1213,6 +1237,7 @@
   }
 
   viewer.addEventListener('click', (e) => {
+    if (performance.now() - viewerOpenedAt < 350) return;
     const goBtn = e.target.closest('.viewer__go');
     if (goBtn) {
       const page = +goBtn.dataset.page;

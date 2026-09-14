@@ -719,6 +719,7 @@ button { font: inherit; color: inherit; }
   cursor: grabbing;
   box-shadow: 0 24px 30px -12px rgba(100,78,60,.55);
 }
+.page.is-playable .card.is-pressing { filter: brightness(1.06); }
 .card.is-target { filter: brightness(1.1) saturate(1.1); outline: 2px solid rgba(166,90,98,.6); outline-offset: 2px; }
 .card.is-flying { z-index: 40 !important; }
 .page.is-playable .card.is-open { opacity: 0; }
